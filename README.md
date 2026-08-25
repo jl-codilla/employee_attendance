@@ -1,8 +1,58 @@
-# employee_attendance
+# employee_attendance App
 
-A new Flutter project.
+## Introduction
 
-## Getting Started
+Hello! This is a simple employee attendance mobile app that records and tracks employee time-in and time-out and their respective locations(longitude, latitude).
+
+### Flutter Packages used:
+- **geolocator**
+    - record time in and time out locations
+- **crypto**
+    - password encryption
+- **material**
+    - UI
+- **shared_preferences**
+    - user sessions
+- **supabase_flutter**
+    - supabase connection
+
+### Database Used:
+- **Supabase**(initial testing)
+- **MSSQL**(main DB)
+
+## App Structure
+<img src='./readme_files/an.png' alt='app_structure'>
+
+## Instructions
+
+### For **development** 
+Make sure to input this in the terminal to download the necessary dependencies/packages
+```
+flutter pub get
+```
+After downloading the dependencies/packages you may input this in the terminal
+```
+flutter run
+```
+Or press ```F5``` to enter debug mode in VSCode.
+
+**Note:** make sure you have an android emulator ready(I'm currently using pixel 8 Android 16 Balklava).
+
+### Building the App
+
+Before being able to get the app, you must build it using
+```
+flutter build apk --release
+```
+
+The latest .apk build is stored in ```/build/app/outputs/flutter-apk/app-release.apk```
+
+Okay, I think that's all there is to it. Hope it helps! - *John Lorenz Codilla*
+
+
+
+
+<!-- ## Getting Started
 
 This project is a starting point for a Flutter application.
 
@@ -14,4 +64,4 @@ A few resources to get you started if this is your first Flutter project:
 
 For help getting started with Flutter development, view the
 [online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+samples, guidance on mobile development, and a full API reference. -->
