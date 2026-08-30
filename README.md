@@ -10,14 +10,19 @@ Hello! This is a simple employee attendance mobile app that records and tracks e
 - **crypto**
     - password encryption
 - **material**
-    - UI
+    - provides Material Design UI components
 - **shared_preferences**
-    - user sessions
-- **supabase_flutter**
-    - supabase connection
+    - stores local user session information
+- **http**
+    - sends HTTP requests to the Node.js API
+- **connectivity_plus**
+    - detects changes in internet connectivity
+- **path**
+    - access and manage local file paths for the SQLite database
+- **sqflite**
+    - create and manage the local SQLite database for offline attendance data
 
 ### Database Used:
-- **Supabase**(initial testing)
 - **MSSQL**(main DB)
 
 ## App Structure
