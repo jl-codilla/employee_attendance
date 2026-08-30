@@ -1,10 +1,7 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/api_service.dart';
 import 'home_page.dart';
 import 'register_page.dart';
 
@@ -37,49 +34,46 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final passwordHash =
-          md5.convert(utf8.encode(password)).toString();
-
-      final user = await Supabase.instance.client
-          .from('users')
-          .select('uid, employee_id, full_name')
-          .eq('employee_id', employeeId)
-          .eq('password', passwordHash)
-          .maybeSingle();
+      final response = await ApiService.login(
+        employeeId: employeeId,
+        password: password,
+      );
 
       if (!mounted) return;
 
-      if (user == null) {
-        _showMessage(
-          'Invalid employee ID or password.',
+      if (response['success'] == true) {
+        final user = response['user'];
+
+        final prefs = await SharedPreferences.getInstance();
+
+        await prefs.setString(
+          'employee_uid',
+          user['uid'].toString(),
         );
-        return;
+
+        await prefs.setString(
+          'employee_id',
+          user['employee_id'].toString(),
+        );
+
+        await prefs.setString(
+          'full_name',
+          user['full_name'].toString(),
+        );
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => const HomePage(),
+          ),
+        );
+      } else {
+        _showMessage(
+          response['message'] ??
+              'Invalid employee ID or password.',
+        );
       }
-
-      final prefs = await SharedPreferences.getInstance();
-
-      await prefs.setString(
-        'employee_uid',
-        user['uid'].toString(),
-      );
-
-      await prefs.setString(
-        'employee_id',
-        user['employee_id'].toString(),
-      );
-
-      await prefs.setString(
-        'full_name',
-        user['full_name'].toString(),
-      );
-
-      if (!mounted) return;
-
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => const HomePage(),
-        ),
-      );
     } catch (error) {
       if (!mounted) return;
 

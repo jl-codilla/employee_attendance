@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../services/api_service.dart';
 
 class AttendanceHistoryPage extends StatefulWidget {
   const AttendanceHistoryPage({super.key});
@@ -12,7 +13,6 @@ class AttendanceHistoryPage extends StatefulWidget {
 
 class _AttendanceHistoryPageState
     extends State<AttendanceHistoryPage> {
-  final supabase = Supabase.instance.client;
 
   bool _isLoading = true;
   String? _userUid;
@@ -43,20 +43,24 @@ class _AttendanceHistoryPageState
 
       _userUid = uid;
 
-      final response = await supabase
-          .from('attendance_logs')
-          .select(
-            'id, action, latitude, longitude, created_at',
-          )
-          .eq('user_uid', uid)
-          .order('created_at', ascending: false);
+      final response = await ApiService.getAttendanceHistory(
+        userUid: uid,
+      );
 
       if (!mounted) return;
 
+      if (response['success'] != true) {
+        throw Exception(
+          response['message'] ??
+              'Unable to load attendance history.',
+        );
+      }
+
       setState(() {
         _history = List<Map<String, dynamic>>.from(
-          response,
+          response['attendance'] ?? [],
         );
+
         _isLoading = false;
       });
     } catch (error) {

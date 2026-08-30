@@ -3,8 +3,17 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'screens/login_page.dart';
 
+import 'services/local_database.dart';
+import 'services/sync_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  await LocalDatabase.instance.database;
+  
+  await LocalDatabase.instance.clearPendingAttendance();
+
+  SyncService.instance.startListening();
 
   await Supabase.initialize(
     url: 'https://uwqcldejliwkfatxgkmp.supabase.co',

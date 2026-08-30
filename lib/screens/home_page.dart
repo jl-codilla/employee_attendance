@@ -1,8 +1,14 @@
+// packages
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
+// services
+import '../services/api_service.dart';
+import '../services/local_database.dart';
+import '../services/sync_service.dart';
+
+// pages
 import 'attendance_history_page.dart';
 import 'login_page.dart';
 
@@ -14,7 +20,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  final supabase = Supabase.instance.client;
 
   bool _isClockedIn = false;
   bool _isLoading = true;
@@ -58,6 +63,9 @@ class _HomePageState extends State<HomePage> {
 
     _userUid = uid;
 
+    // synchronize any offline attendance records.
+    await SyncService.instance.syncPendingAttendance();
+
     await Future.wait([
       _loadProfile(),
       _loadAttendanceStatus(),
@@ -69,13 +77,19 @@ class _HomePageState extends State<HomePage> {
     if (_userUid == null) return;
 
     try {
-      final user = await supabase
-          .from('users')
-          .select('employee_id, full_name')
-          .eq('uid', _userUid!)
-          .maybeSingle();
+      final response = await ApiService.getProfile(
+        userUid: _userUid!,
+      );
 
-      if (!mounted || user == null) return;
+      if (!mounted) return;
+
+      if (response['success'] != true) {
+        throw Exception(
+          response['message'] ?? 'Unable to load profile.',
+        );
+      }
+
+      final user = response['user'];
 
       setState(() {
         _employeeName = user['full_name']?.toString();
@@ -95,36 +109,39 @@ class _HomePageState extends State<HomePage> {
     if (_userUid == null) return;
 
     try {
-      final response = await supabase
-          .from('attendance_logs')
-          .select('action, created_at')
-          .eq('user_uid', _userUid!)
-          .order('created_at', ascending: false);
-
-      DateTime? latestTimeIn;
-      DateTime? latestTimeOut;
-
-      if (response.isNotEmpty) {
-        final latestRecord = response.first;
-
-        final latestDateTime =
-            DateTime.parse(
-              latestRecord['created_at'].toString(),
-            ).toLocal();
-
-        if (latestRecord['action'] == 'TIME_IN') {
-          latestTimeIn = latestDateTime;
-        } else if (latestRecord['action'] == 'TIME_OUT') {
-          latestTimeOut = latestDateTime;
-        }
-      }
+      final response = await ApiService.getAttendanceStatus(
+        userUid: _userUid!,
+      );
 
       if (!mounted) return;
 
+      if (response['success'] != true) {
+        throw Exception(
+          response['message'] ?? 'Unable to load attendance status.',
+        );
+      }
+
+      final isTimedIn = response['is_timed_in'] == true;
+
+      DateTime? timeIn;
+      DateTime? timeOut;
+
+      if (response['time_in'] != null) {
+        timeIn = DateTime.parse(
+          response['time_in'].toString(),
+        ).toLocal();
+      }
+
+      if (response['time_out'] != null) {
+        timeOut = DateTime.parse(
+          response['time_out'].toString(),
+        ).toLocal();
+      }
+
       setState(() {
-        _isClockedIn = latestTimeIn != null;
-        _timeIn = latestTimeIn;
-        _timeOut = latestTimeOut;
+        _isClockedIn = isTimedIn;
+        _timeIn = timeIn;
+        _timeOut = timeOut;
         _isLoading = false;
       });
     } catch (error) {
@@ -145,19 +162,24 @@ class _HomePageState extends State<HomePage> {
     if (_userUid == null) return;
 
     try {
-      final response = await supabase
-          .from('attendance_logs')
-          .select('action, created_at, latitude, longitude')
-          .eq('user_uid', _userUid!)
-          .order('created_at', ascending: false)
-          .limit(10);
+      final response = await ApiService.getAttendanceHistory(
+        userUid: _userUid!,
+      );
 
       if (!mounted) return;
 
-      setState(() {
-        _recentHistory = List<Map<String, dynamic>>.from(
-          response,
+      if (response['success'] != true) {
+        throw Exception(
+          response['message'] ?? 'Unable to load attendance history.',
         );
+      }
+
+      final records = List<Map<String, dynamic>>.from(
+        response['attendance'] ?? [],
+      );
+
+      setState(() {
+        _recentHistory = records.take(10).toList();
         _isLoadingHistory = false;
       });
     } catch (error) {
@@ -219,36 +241,55 @@ class _HomePageState extends State<HomePage> {
     try {
       final position = await _getLocation();
 
-      if (position == null) {
-        return;
+      if (position == null) return;
+
+      final createdAt = DateTime.now();
+
+      // ALWAYS save locally first.
+      await LocalDatabase.instance.insertPendingAttendance(
+        userUid: _userUid!,
+        action: 'TIME_IN',
+        latitude: position.latitude,
+        longitude: position.longitude,
+        createdAt: createdAt,
+      );
+
+      // Immediately update the UI.
+      if (mounted) {
+        setState(() {
+          _isClockedIn = true;
+          _timeIn = createdAt;
+          _timeOut = null;
+        });
       }
 
-      await supabase.from('attendance_logs').insert({
-        'user_uid': _userUid,
-        'action': 'TIME_IN',
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      });
-
-      final now = DateTime.now();
+      // Try to sync to MSSQL.
+      final synced =
+          await SyncService.instance.syncPendingAttendance();
 
       if (!mounted) return;
 
-      setState(() {
-        _isClockedIn = true;
-        _timeIn = now;
-        _timeOut = null;
-      });
+      if (synced) {
+        await _loadAttendanceStatus();
+        await _loadRecentHistory();
 
-      _showMessage('Time in recorded successfully.');
-      
-      await _loadRecentHistory();
+        if (!mounted) return;
 
+        _showMessage(
+          'Time in recorded successfully.',
+        );
+      } else {
+        _showMessage(
+          'Time in saved locally. '
+          'It will sync when internet is available.',
+        );
+      }
     } catch (error) {
+      if (!mounted) return;
+
       _showMessage(
-        'Failed to record time in. '
-        'Check your internet connection and try again.',
-      );
+        'Unable to record attendance. Please try again.',
+      );  
     } finally {
       if (mounted) {
         setState(() {
@@ -271,34 +312,48 @@ class _HomePageState extends State<HomePage> {
     try {
       final position = await _getLocation();
 
-      if (position == null) {
-        return;
+      if (position == null) return;
+
+      final createdAt = DateTime.now();
+
+      // ALWAYS save locally first.
+      await LocalDatabase.instance.insertPendingAttendance(
+        userUid: _userUid!,
+        action: 'TIME_OUT',
+        latitude: position.latitude,
+        longitude: position.longitude,
+        createdAt: createdAt,
+      );
+
+      // Immediately update the UI.
+      if (mounted) {
+        setState(() {
+          _isClockedIn = false;
+          _timeOut = createdAt;
+        });
       }
 
-      await supabase.from('attendance_logs').insert({
-        'user_uid': _userUid,
-        'action': 'TIME_OUT',
-        'latitude': position.latitude,
-        'longitude': position.longitude,
-      });
-
-      final now = DateTime.now();
+      // Try to sync.
+      final synced =
+          await SyncService.instance.syncPendingAttendance();
 
       if (!mounted) return;
 
-      setState(() {
-        _isClockedIn = false;
-        _timeOut = now;
-      });
+      if (synced) {
+        await _loadAttendanceStatus();
+        await _loadRecentHistory();
 
-      _showMessage('Time out recorded successfully.');
+        if (!mounted) return;
 
-      await _loadRecentHistory();
-    } catch (error) {
-      _showMessage(
-        'Failed to record time out. '
-        'Check your internet connection and try again.',
-      );
+        _showMessage(
+          'Time out recorded successfully.',
+        );
+      } else {
+        _showMessage(
+          'Time out saved locally. '
+          'It will sync when internet is available.',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {

@@ -1,8 +1,6 @@
-import 'dart:convert';
-
-import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../services/api_service.dart';
+
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -47,54 +45,37 @@ class _RegisterPageState extends State<RegisterPage> {
     });
 
     try {
-      // Check whether the employee ID already exists.
-      final existingUser = await Supabase.instance.client
-          .from('users')
-          .select('uid')
-          .eq('employee_id', employeeId)
-          .maybeSingle();
+      final response = await ApiService.register(
+        employeeId: employeeId,
+        fullName: fullName,
+        password: password,
+      );
 
-      if (existingUser != null) {
+      if (!mounted) return;
+
+      if (response['success'] == true) {
+        _showMessage(
+          'Registration successful. You can now log in.',
+        );
+
+        await Future.delayed(
+          const Duration(milliseconds: 800),
+        );
+
         if (!mounted) return;
 
+        Navigator.of(context).pop();
+      } else {
         _showMessage(
-          'Employee ID is already registered.',
+          response['message'] ??
+              'Registration failed.',
         );
-        return;
       }
-
-      // Convert the password to MD5.
-      final passwordHash =
-          md5.convert(utf8.encode(password)).toString();
-
-      // Create the user in our users table.
-      await Supabase.instance.client
-          .from('users')
-          .insert({
-        'employee_id': employeeId,
-        'password': passwordHash,
-        'full_name': fullName,
-      });
-
-      if (!mounted) return;
-
-      _showMessage(
-        'Registration successful. You can now log in.',
-      );
-
-      await Future.delayed(
-        const Duration(milliseconds: 800),
-      );
-
-      if (!mounted) return;
-
-      Navigator.of(context).pop();
     } catch (error) {
       if (!mounted) return;
 
       _showMessage(
-        'Registration failed. '
-        'Check your internet connection and try again.',
+        'Check internet connection and try again.',
       );
     } finally {
       if (mounted) {
