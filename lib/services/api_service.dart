@@ -4,7 +4,9 @@ import 'package:http/http.dart' as http;
 
 class ApiService {
   // Android emulator:
-  static const String baseUrl = 'http://10.0.2.2:3000';
+  static const String baseUrl = 'https://employee-attendance-api-5rxh.onrender.com';
+
+  // http://10.0.2.2:3000
 
   // For a physical phone, replace the address above with
   // your computer's local IP address, for example:

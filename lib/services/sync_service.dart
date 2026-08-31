@@ -12,45 +12,55 @@ class SyncService {
 
   bool _isSyncing = false;
 
+  void Function(int syncedCount)? onSyncComplete;
+
   StreamSubscription<List<ConnectivityResult>>?
       _connectivitySubscription;
 
   void startListening() {
-    if (_connectivitySubscription != null) return;
+      if (_connectivitySubscription != null) return;
 
-    _connectivitySubscription =
-        Connectivity().onConnectivityChanged.listen(
-      (results) async {
-        print(
-          'CONNECTIVITY: Changed to $results',
-        );
-
-        final hasNetwork = results.any(
-          (result) =>
-              result != ConnectivityResult.none,
-        );
-
-        if (hasNetwork) {
+      _connectivitySubscription =
+          Connectivity().onConnectivityChanged.listen(
+        (results) async {
           print(
-            'CONNECTIVITY: Network detected. '
-            'Starting sync...',
+            'CONNECTIVITY: Changed to $results',
           );
 
-          await syncPendingAttendance();
-        }
-      },
-    );
-  }
+          final hasNetwork = results.any(
+            (result) =>
+                result != ConnectivityResult.none,
+          );
 
-  Future<bool> syncPendingAttendance() async {
+          if (hasNetwork) {
+            print(
+              'CONNECTIVITY: Network detected. '
+              'Starting sync...',
+            );
+
+            final synced =
+                await syncPendingAttendance();
+
+            if (synced > 0) {
+              onSyncComplete?.call(synced);
+              // print(
+              //   'SYNC: Attendance data synced successfully.',
+              // );
+            }
+          }
+        },
+      );
+    }
+
+  Future<int> syncPendingAttendance() async {
     if (_isSyncing) {
       print('SYNC: Already syncing.');
-      return false;
+      return 0;
     }
 
     _isSyncing = true;
 
-    bool allSynced = true;
+    int syncedCount = 0;
 
     try {
       print('SYNC: Starting...');
@@ -58,6 +68,11 @@ class SyncService {
       final pendingRecords =
           await LocalDatabase.instance
               .getPendingAttendance();
+
+      if (pendingRecords.isEmpty) {
+        print('SYNC: No pending records.');
+        return 0;
+      }       
 
       for (final record in pendingRecords) {
       print(
@@ -141,18 +156,16 @@ class SyncService {
                 .deletePendingAttendance(
               record['id'] as int,
             );
+
+            syncedCount++;
           } else {
             print('SYNC: API returned failure.');
-
-            allSynced = false;
             break;
           }
         } catch (error) {
           print(
             'SYNC: Error processing record: $error',
           );
-
-          allSynced = false;
           break;
         }
       }
@@ -160,9 +173,9 @@ class SyncService {
       _isSyncing = false;
     }
 
-    print('SYNC: Finished. allSynced=$allSynced');
+    print('SYNC: Finished. syncedCount=$syncedCount');
 
-    return allSynced;
+    return syncedCount;
   }
 
   void dispose() {

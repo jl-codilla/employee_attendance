@@ -40,9 +40,22 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+
+    SyncService.instance.onSyncComplete = (syncedCount) {
+      if (!mounted) return;
+
+      _showMessage(
+        '$syncedCount attendance record(s) synced successfully.',
+      );
+
+      _loadAttendanceStatus();
+      _loadRecentHistory();
+    };
+
     _initializeHome();
   }
 
+  
   Future<void> _initializeHome() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -269,7 +282,7 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
-      if (synced) {
+      if (synced > 0) {
         await _loadAttendanceStatus();
         await _loadRecentHistory();
 
@@ -339,7 +352,7 @@ class _HomePageState extends State<HomePage> {
 
       if (!mounted) return;
 
-      if (synced) {
+      if (synced > 0) {
         await _loadAttendanceStatus();
         await _loadRecentHistory();
 
