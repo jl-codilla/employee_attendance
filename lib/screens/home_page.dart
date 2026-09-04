@@ -55,7 +55,6 @@ class _HomePageState extends State<HomePage> {
     _initializeHome();
   }
 
-  
   Future<void> _initializeHome() async {
     final prefs = await SharedPreferences.getInstance();
 
